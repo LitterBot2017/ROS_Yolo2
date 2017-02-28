@@ -11,3 +11,5 @@ test_results
 /devel
 /gtest
 /Testing
+
+data/*.weights

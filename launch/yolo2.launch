@@ -1,0 +1,11 @@
+<launch>
+  <group ns="vision">
+    <node pkg="nodelet" type="nodelet" name="vision_nodelet"  args="manager"/>
+    <node pkg="nodelet" type="nodelet" name="camera" args="load uvc_camera/CameraNodelet vision_nodelet" />
+    <remap from="yolo2/image" to="image_raw" />
+    <node pkg="nodelet" type="nodelet" name="yolo2" args="load yolo2/Yolo2Nodelet vision_nodelet" >
+      <param name="confidence" value="0.5" />
+      <param name="nms" value="0.4" />
+    </node>
+  </group>
+</launch>
