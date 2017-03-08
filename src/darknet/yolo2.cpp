@@ -31,6 +31,7 @@
 
 #include <cstdint>
 #include <cstdlib>
+#include <math.h>
 #include <string>
 #include <vector>
 
@@ -136,10 +137,10 @@ std::vector<yolo2::Detection> Detector::forward(float *data)
       yolo2::Detection detection;
       box b = boxes_[i];
 
-      detection.x = b.x;
-      detection.y = b.y;
-      detection.width = b.w;
-      detection.height = b.h;
+      detection.x = ((int) round(b.x * 640));
+      detection.y = ((int) round(b.y * 480));
+      detection.width = ((int) round(b.w * 640));
+      detection.height = ((int) round(b.h * 480));
       detection.confidence = prob;
       detection.class_id = class_id;
       detections.push_back(detection);
