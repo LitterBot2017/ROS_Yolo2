@@ -50,6 +50,7 @@ class Detector
   void load(std::string& model_file, std::string& trained_file, double min_confidence, double nms);
   ~Detector();
   image convert_image(const sensor_msgs::ImageConstPtr& msg);
+  image convert_image(const sensor_msgs::Image::Ptr& msg);
   yolo2::ImageDetections detect(float *data);
 
  private:

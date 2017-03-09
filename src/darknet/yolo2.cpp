@@ -76,10 +76,44 @@ yolo2::ImageDetections Detector::detect(float *data)
 {
   yolo2::ImageDetections detections;
   detections.detections = forward(data);
+  detections.num_detections = detections.detections.size();
   return detections;
 }
 
 image Detector::convert_image(const sensor_msgs::ImageConstPtr& msg)
+{
+  if (msg->encoding != sensor_msgs::image_encodings::RGB8)
+  {
+    ROS_ERROR("Unsupported encoding");
+    exit(-1);
+  }
+
+  auto data = msg->data;
+  uint32_t height = msg->height, width = msg->width, offset = msg->step - 3 * width;
+  uint32_t i = 0, j = 0;
+  image im = make_image(width, height, 3);
+
+  for (uint32_t line = height; line; line--)
+  {
+    for (uint32_t column = width; column; column--)
+    {
+      for (uint32_t channel = 0; channel < 3; channel++)
+        im.data[i + width * height * channel] = data[j++] / 255.;
+      i++;
+    }
+    j += offset;
+  }
+
+  if (net_.w == width && net_.h == height)
+  {
+    return im;
+  }
+  image resized = resize_image(im, net_.w, net_.h);
+  free_image(im);
+  return resized;
+}
+
+image Detector::convert_image(const sensor_msgs::Image::Ptr& msg)
 {
   if (msg->encoding != sensor_msgs::image_encodings::RGB8)
   {

@@ -40,51 +40,87 @@
 #include "ros/ros.h"
 #include "std_msgs/Int8.h"
 
+// Camera Indices
+#define DOWNWARD_CAMERA 0
+#define FORWARD_CAMERA 1
+
+// Image sizes
+#define DOWNWARD_WIDTH 1280
+#define DOWNWARD_HEIGHT 470
+#define FORWARD_WIDTH 1280
+#define FORWARD_HEIGHT 720
+
 namespace
 {
 darknet::Detector yoloForward;
 darknet::Detector yoloDownward;
-ros::Publisher publisher;
-image im_forward = {};
-image im_downward = {};
-float *image_data_forward = nullptr;
-float *image_data_downward = nullptr;
+ros::Publisher detectionsPublisher;
+image_transport::Publisher imagePublisher;
+image im = {};
+float *image_data = nullptr;
 ros::Time timestamp;
 std::mutex mutex;
-std::condition_variable im_condition_forward;
-std::condition_variable im_condition_downward;
+std::condition_variable im_condition;
 const std::string NET_DATA = ros::package::getPath("yolo2") + "/data/";
 double confidence, nms;
-int cameraSelect = 0;
+int cameraSelect = FORWARD_CAMERA;
 
-void downwardImageCallback(const sensor_msgs::ImageConstPtr& msg)
-{
-  ROS_INFO("Received downward camera image");
-  im_downward = yoloDownward.convert_image(msg);
-  std::unique_lock<std::mutex> lock(mutex);
-  if (image_data_downward)
-    free(image_data_downward);
-  timestamp = msg->header.stamp;
-  image_data_downward = im_downward.data;
-  lock.unlock();
-  im_condition_downward.notify_one();
+sensor_msgs::Image::Ptr resizeImage(const sensor_msgs::ImageConstPtr& image, uint32_t width, uint32_t height) {
+  sensor_msgs::Image::Ptr resized_image = boost::make_shared<sensor_msgs::Image>();
+
+  resized_image->header = image->header;
+  resized_image->height = height; //image->height;//height;
+  resized_image->width = width; //image->width;//width;
+  resized_image->encoding = image->encoding;
+  resized_image->is_bigendian = image->is_bigendian;
+  resized_image->step = image->step;
+
+  resized_image->data.resize(width * height * 3);
+
+  uint i = 0;
+  for (uint32_t line = height; line; line--) {
+    for (uint32_t column = width; column; column--) {
+      for (uint32_t channel = 0; channel < 3; channel++) {
+        resized_image->data[i] = image->data[i];
+        i++;  
+      }
+    }
+  }
+
+  return resized_image;
 }
 
-void forwardImageCallback(const sensor_msgs::ImageConstPtr& msg)
-{
-  ROS_INFO("Received forward camera image");
-  im_forward = yoloForward.convert_image(msg);
+void setImage(const sensor_msgs::ImageConstPtr& image) {
+  im = yoloForward.convert_image(image);
   std::unique_lock<std::mutex> lock(mutex);
-  if (image_data_forward)
-    free(image_data_forward);
-  timestamp = msg->header.stamp;
-  image_data_forward = im_forward.data;
+  if (image_data)
+    free(image_data);
+  timestamp = image->header.stamp;
+  image_data = im.data;
   lock.unlock();
-  im_condition_forward.notify_one();
+  im_condition.notify_one();
+  imagePublisher.publish(image);
 }
 
-void cameraSelectCallback(const std_msgs::Int8::ConstPtr& msg)
-{
+void downwardImageCallback(const sensor_msgs::ImageConstPtr& image) {
+  if (cameraSelect == DOWNWARD_CAMERA) {
+    ROS_INFO("Received downward camera image");
+    //setImage(resizeImage(image, DOWNWARD_WIDTH, DOWNWARD_HEIGHT));
+    sensor_msgs::Image::Ptr resizedImage = resizeImage(image, DOWNWARD_WIDTH, DOWNWARD_HEIGHT);
+    setImage(resizedImage);
+  }
+}
+
+void forwardImageCallback(const sensor_msgs::ImageConstPtr& image) {
+  if (cameraSelect == FORWARD_CAMERA) {
+    ROS_INFO("Received forward camera image");
+    //setImage(resizeImage(image, FORWARD_WIDTH, FORWARD_HEIGHT));
+    sensor_msgs::Image::Ptr resizedImage = resizeImage(image, FORWARD_WIDTH, FORWARD_HEIGHT);
+    setImage(resizedImage);
+  }
+}
+
+void cameraSelectCallback(const std_msgs::Int8::ConstPtr& msg) {
     ROS_INFO("I heard: [%d]", msg->data);
     cameraSelect = msg->data;
 }
@@ -99,6 +135,7 @@ class Yolo2Nodelet : public nodelet::Nodelet
   virtual void onInit()
   {
     ros::NodeHandle& node = getPrivateNodeHandle();
+
     node.param<double>("confidence", confidence, .8);
     node.param<double>("nms", nms, .4);
 
@@ -112,15 +149,16 @@ class Yolo2Nodelet : public nodelet::Nodelet
     image_transport::ImageTransport transport = image_transport::ImageTransport(node);
     downwardSubscriber = transport.subscribe("left/image", 1, downwardImageCallback);
     forwardSubscriber = transport.subscribe("right/image", 1, forwardImageCallback);
-    ROS_INFO("Subscribed to downward camera");
-    cameraSelectSubscriber = node.subscribe("cameraSelect", 1, cameraSelectCallback);
-    publisher = node.advertise<yolo2::ImageDetections>("detections", 5);
 
+    cameraSelectSubscriber = node.subscribe("camera_select", 1, cameraSelectCallback);
+    detectionsPublisher = node.advertise<yolo2::ImageDetections>("detections", 5);
+    imagePublisher = transport.advertise("image_raw", 5);
+
+    ROS_INFO("Initialized YOLO");
     yolo_thread = new std::thread(run_yolo);
   }
 
-  ~Yolo2Nodelet()
-  {
+  ~Yolo2Nodelet() {
     yolo_thread->join();
     delete yolo_thread;
   }
@@ -132,35 +170,29 @@ class Yolo2Nodelet : public nodelet::Nodelet
 
   std::thread *yolo_thread;
 
-  static void run_yolo()
-  {
-    while (ros::ok())
-    {
+  static void run_yolo() {
+
+    while (ros::ok()) {
+
+      ROS_INFO("Running YOLO");
       float *data;
       ros::Time stamp;
       {
         std::unique_lock<std::mutex> lock(mutex);
-        if (cameraSelect == 0) {
-          while (!image_data_downward)
-            im_condition_downward.wait(lock);
-          data = image_data_downward;
-          image_data_downward = nullptr;
-        } else if (cameraSelect == 1) {
-          while (!image_data_forward)
-            im_condition_forward.wait(lock);
-          data = image_data_forward;
-          image_data_forward = nullptr;
-        }
+        while (!image_data)
+          im_condition.wait(lock);
+        data = image_data;
+        image_data = nullptr;
         stamp = timestamp;
       }
       boost::shared_ptr<yolo2::ImageDetections> detections(new yolo2::ImageDetections);
-      if (cameraSelect == 0) {
+      if (cameraSelect == DOWNWARD_CAMERA) {
         *detections = yoloDownward.detect(data);
-      } else if (cameraSelect == 1) {
+      } else if (cameraSelect == FORWARD_CAMERA) {
         *detections = yoloForward.detect(data);
       }
       detections->header.stamp = stamp;
-      publisher.publish(detections);
+      detectionsPublisher.publish(detections);
       free(data);
     }
   }
