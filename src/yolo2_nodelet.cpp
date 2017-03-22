@@ -45,10 +45,10 @@
 #define FORWARD_CAMERA 1
 
 // Image sizes
-#define DOWNWARD_WIDTH 1280
-#define DOWNWARD_HEIGHT 470
-#define FORWARD_WIDTH 1280
-#define FORWARD_HEIGHT 720
+#define DOWNWARD_WIDTH 640
+#define DOWNWARD_HEIGHT 480
+#define FORWARD_WIDTH 640//1280
+#define FORWARD_HEIGHT 480//720
 
 namespace
 {
@@ -105,18 +105,18 @@ void setImage(const sensor_msgs::ImageConstPtr& image) {
 void downwardImageCallback(const sensor_msgs::ImageConstPtr& image) {
   if (cameraSelect == DOWNWARD_CAMERA) {
     ROS_INFO("Received downward camera image");
-    //setImage(resizeImage(image, DOWNWARD_WIDTH, DOWNWARD_HEIGHT));
-    sensor_msgs::Image::Ptr resizedImage = resizeImage(image, DOWNWARD_WIDTH, DOWNWARD_HEIGHT);
-    setImage(resizedImage);
+    setImage(image);//resizeImage(image, DOWNWARD_WIDTH, DOWNWARD_HEIGHT));
+    //sensor_msgs::Image::Ptr resizedImage = resizeImage(image, DOWNWARD_WIDTH, DOWNWARD_HEIGHT);
+    //setImage(image);
   }
 }
 
 void forwardImageCallback(const sensor_msgs::ImageConstPtr& image) {
   if (cameraSelect == FORWARD_CAMERA) {
     ROS_INFO("Received forward camera image");
-    //setImage(resizeImage(image, FORWARD_WIDTH, FORWARD_HEIGHT));
-    sensor_msgs::Image::Ptr resizedImage = resizeImage(image, FORWARD_WIDTH, FORWARD_HEIGHT);
-    setImage(resizedImage);
+    setImage(resizeImage(image, FORWARD_WIDTH, FORWARD_HEIGHT));
+    //sensor_msgs::Image::Ptr resizedImage = resizeImage(image, FORWARD_WIDTH, FORWARD_HEIGHT);
+    //setImage(image);
   }
 }
 
