@@ -45,10 +45,10 @@
 #define FORWARD_CAMERA 1
 
 // Image sizes
-#define DOWNWARD_WIDTH 1280
-#define DOWNWARD_HEIGHT 470
-#define FORWARD_WIDTH 1280
-#define FORWARD_HEIGHT 720
+#define DOWNWARD_WIDTH 640
+#define DOWNWARD_HEIGHT 270
+#define FORWARD_WIDTH 640
+#define FORWARD_HEIGHT 480
 
 namespace
 {
@@ -82,7 +82,7 @@ sensor_msgs::Image::Ptr resizeImage(const sensor_msgs::ImageConstPtr& image, uin
     for (uint32_t column = width; column; column--) {
       for (uint32_t channel = 0; channel < 3; channel++) {
         resized_image->data[i] = image->data[i];
-        i++;  
+        i++;
       }
     }
   }
@@ -90,12 +90,13 @@ sensor_msgs::Image::Ptr resizeImage(const sensor_msgs::ImageConstPtr& image, uin
   return resized_image;
 }
 
-void setImage(const sensor_msgs::ImageConstPtr& image) {
-  im = yoloForward.convert_image(image);
+void setImage(const sensor_msgs::ImageConstPtr& resizedImage, const sensor_msgs::ImageConstPtr& image) {
+  ROS_INFO("Height = %d and Width = %d", resizedImage->height, resizedImage->width);
+  im = yoloDownward.convert_image(resizedImage);
   std::unique_lock<std::mutex> lock(mutex);
   if (image_data)
     free(image_data);
-  timestamp = image->header.stamp;
+  timestamp = resizedImage->header.stamp;
   image_data = im.data;
   lock.unlock();
   im_condition.notify_one();
@@ -107,7 +108,7 @@ void downwardImageCallback(const sensor_msgs::ImageConstPtr& image) {
     ROS_INFO("Received downward camera image");
     //setImage(resizeImage(image, DOWNWARD_WIDTH, DOWNWARD_HEIGHT));
     sensor_msgs::Image::Ptr resizedImage = resizeImage(image, DOWNWARD_WIDTH, DOWNWARD_HEIGHT);
-    setImage(resizedImage);
+    setImage(resizedImage, image);
   }
 }
 
@@ -116,7 +117,7 @@ void forwardImageCallback(const sensor_msgs::ImageConstPtr& image) {
     ROS_INFO("Received forward camera image");
     //setImage(resizeImage(image, FORWARD_WIDTH, FORWARD_HEIGHT));
     sensor_msgs::Image::Ptr resizedImage = resizeImage(image, FORWARD_WIDTH, FORWARD_HEIGHT);
-    setImage(resizedImage);
+    setImage(resizedImage, image);
   }
 }
 
@@ -139,11 +140,11 @@ class Yolo2Nodelet : public nodelet::Nodelet
     node.param<double>("confidence", confidence, .8);
     node.param<double>("nms", nms, .4);
 
-    std::string config = NET_DATA + "downward.cfg", weights = NET_DATA + "downward.weights";
+    std::string config = NET_DATA + "downward.cfg", weights = NET_DATA + "downward_cement.weights";
     yoloDownward.load(config, weights, confidence, nms);
 
     config = NET_DATA + "forward.cfg";
-    weights = NET_DATA + "forward.weights";
+    weights = NET_DATA + "forward_cement.weights";
     yoloForward.load(config, weights, confidence, nms);
 
     image_transport::ImageTransport transport = image_transport::ImageTransport(node);
@@ -192,6 +193,7 @@ class Yolo2Nodelet : public nodelet::Nodelet
         *detections = yoloForward.detect(data);
       }
       detections->header.stamp = stamp;
+      detections->camera = cameraSelect;
       detectionsPublisher.publish(detections);
       free(data);
     }
