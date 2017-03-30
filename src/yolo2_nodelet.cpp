@@ -46,7 +46,7 @@
 
 // Image sizes
 #define DOWNWARD_WIDTH 640
-#define DOWNWARD_HEIGHT 270
+#define DOWNWARD_HEIGHT 480
 #define FORWARD_WIDTH 640
 #define FORWARD_HEIGHT 480
 
@@ -140,11 +140,11 @@ class Yolo2Nodelet : public nodelet::Nodelet
     node.param<double>("confidence", confidence, .8);
     node.param<double>("nms", nms, .4);
 
-    std::string config = NET_DATA + "downward.cfg", weights = NET_DATA + "downward_cement.weights";
+    std::string config = NET_DATA + "downward.cfg", weights = NET_DATA + "downward_grass.weights";
     yoloDownward.load(config, weights, confidence, nms);
 
     config = NET_DATA + "forward.cfg";
-    weights = NET_DATA + "forward_cement.weights";
+    weights = NET_DATA + "forward_grass.weights";
     yoloForward.load(config, weights, confidence, nms);
 
     image_transport::ImageTransport transport = image_transport::ImageTransport(node);
