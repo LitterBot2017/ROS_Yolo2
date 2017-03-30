@@ -72,10 +72,10 @@ Detector::~Detector()
   free_network(net_);
 }
 
-yolo2::ImageDetections Detector::detect(float *data)
+yolo2::ImageDetections Detector::detect(float *data, int width, int height)
 {
   yolo2::ImageDetections detections;
-  detections.detections = forward(data);
+  detections.detections = forward(data, width, height);
   detections.num_detections = detections.detections.size();
   return detections;
 }
@@ -146,7 +146,7 @@ image Detector::convert_image(const sensor_msgs::Image::Ptr& msg)
   return resized;
 }
 
-std::vector<yolo2::Detection> Detector::forward(float *data)
+std::vector<yolo2::Detection> Detector::forward(float *data, int width, int height)
 {
   float *prediction = network_predict(net_, data);
   layer output_layer = net_.layers[net_.n - 1];
@@ -171,10 +171,10 @@ std::vector<yolo2::Detection> Detector::forward(float *data)
       yolo2::Detection detection;
       box b = boxes_[i];
 
-      detection.x = ((int) round(b.x * 640));
-      detection.y = ((int) round(b.y * 480));
-      detection.width = ((int) round(b.w * 640));
-      detection.height = ((int) round(b.h * 480));
+      detection.x = ((int) round(b.x * width));
+      detection.y = ((int) round(b.y * height));
+      detection.width = ((int) round(b.w * width));
+      detection.height = ((int) round(b.h * height));
       detection.confidence = prob;
       detection.class_id = class_id;
       detections.push_back(detection);

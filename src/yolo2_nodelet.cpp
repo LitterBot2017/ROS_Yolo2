@@ -46,7 +46,7 @@
 
 // Image sizes
 #define DOWNWARD_WIDTH 640
-#define DOWNWARD_HEIGHT 480
+#define DOWNWARD_HEIGHT 360
 #define FORWARD_WIDTH 640
 #define FORWARD_HEIGHT 480
 
@@ -140,11 +140,11 @@ class Yolo2Nodelet : public nodelet::Nodelet
     node.param<double>("confidence", confidence, .8);
     node.param<double>("nms", nms, .4);
 
-    std::string config = NET_DATA + "downward.cfg", weights = NET_DATA + "downward_grass.weights";
+    std::string config = NET_DATA + "downward.cfg", weights = NET_DATA + "downward_cement.weights";
     yoloDownward.load(config, weights, confidence, nms);
 
     config = NET_DATA + "forward.cfg";
-    weights = NET_DATA + "forward_grass.weights";
+    weights = NET_DATA + "forward_cement.weights";
     yoloForward.load(config, weights, confidence, nms);
 
     image_transport::ImageTransport transport = image_transport::ImageTransport(node);
@@ -188,9 +188,9 @@ class Yolo2Nodelet : public nodelet::Nodelet
       }
       boost::shared_ptr<yolo2::ImageDetections> detections(new yolo2::ImageDetections);
       if (cameraSelect == DOWNWARD_CAMERA) {
-        *detections = yoloDownward.detect(data);
+        *detections = yoloDownward.detect(data, DOWNWARD_WIDTH, DOWNWARD_HEIGHT);
       } else if (cameraSelect == FORWARD_CAMERA) {
-        *detections = yoloForward.detect(data);
+        *detections = yoloForward.detect(data, FORWARD_WIDTH, FORWARD_HEIGHT);
       }
       detections->header.stamp = stamp;
       detections->camera = cameraSelect;
