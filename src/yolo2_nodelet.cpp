@@ -46,7 +46,7 @@
 
 // Image sizes
 #define DOWNWARD_WIDTH 640
-#define DOWNWARD_HEIGHT 360
+#define DOWNWARD_HEIGHT 360 // 530
 #define FORWARD_WIDTH 640
 #define FORWARD_HEIGHT 480
 
@@ -107,8 +107,8 @@ void downwardImageCallback(const sensor_msgs::ImageConstPtr& image) {
   if (cameraSelect == DOWNWARD_CAMERA) {
     ROS_INFO("Received downward camera image");
     //setImage(resizeImage(image, DOWNWARD_WIDTH, DOWNWARD_HEIGHT));
-    sensor_msgs::Image::Ptr resizedImage = resizeImage(image, DOWNWARD_WIDTH, DOWNWARD_HEIGHT);
-    setImage(resizedImage, image);
+    //sensor_msgs::Image::Ptr resizedImage = resizeImage(image, DOWNWARD_WIDTH, DOWNWARD_HEIGHT);
+    setImage(image, image);
   }
 }
 
@@ -116,8 +116,8 @@ void forwardImageCallback(const sensor_msgs::ImageConstPtr& image) {
   if (cameraSelect == FORWARD_CAMERA) {
     ROS_INFO("Received forward camera image");
     //setImage(resizeImage(image, FORWARD_WIDTH, FORWARD_HEIGHT));
-    sensor_msgs::Image::Ptr resizedImage = resizeImage(image, FORWARD_WIDTH, FORWARD_HEIGHT);
-    setImage(resizedImage, image);
+    //sensor_msgs::Image::Ptr resizedImage = resizeImage(image, FORWARD_WIDTH, FORWARD_HEIGHT);
+    setImage(image, image);
   }
 }
 
@@ -140,11 +140,11 @@ class Yolo2Nodelet : public nodelet::Nodelet
     node.param<double>("confidence", confidence, .8);
     node.param<double>("nms", nms, .4);
 
-    std::string config = NET_DATA + "downward.cfg", weights = NET_DATA + "downward_cement.weights";
-    yoloDownward.load(config, weights, confidence, nms);
+    std::string config = NET_DATA + "downward.cfg", weights = NET_DATA + "downward_grass.weights";
+    yoloDownward.load(config, weights, 0.6, nms);
 
     config = NET_DATA + "forward.cfg";
-    weights = NET_DATA + "forward_cement.weights";
+    weights = NET_DATA + "forward_grass.weights";
     yoloForward.load(config, weights, confidence, nms);
 
     image_transport::ImageTransport transport = image_transport::ImageTransport(node);
@@ -188,15 +188,51 @@ class Yolo2Nodelet : public nodelet::Nodelet
       }
       boost::shared_ptr<yolo2::ImageDetections> detections(new yolo2::ImageDetections);
       if (cameraSelect == DOWNWARD_CAMERA) {
-        *detections = yoloDownward.detect(data, DOWNWARD_WIDTH, DOWNWARD_HEIGHT);
+        *detections = getValidDetections(yoloDownward.detect(data, DOWNWARD_WIDTH, FORWARD_HEIGHT),DOWNWARD_WIDTH, DOWNWARD_HEIGHT);
       } else if (cameraSelect == FORWARD_CAMERA) {
-        *detections = yoloForward.detect(data, FORWARD_WIDTH, FORWARD_HEIGHT);
+        *detections = getValidDetections(yoloForward.detect(data, FORWARD_WIDTH, FORWARD_HEIGHT), FORWARD_WIDTH, FORWARD_HEIGHT);
       }
       detections->header.stamp = stamp;
       detections->camera = cameraSelect;
       detectionsPublisher.publish(detections);
       free(data);
     }
+  }
+
+
+  static bool isValidDetection(yolo2::Detection& detection, int width, int height) {
+    bool valid = true;
+    if (detection.x < 0 || (detection.x + detection.width) > width)
+      valid = false;
+
+    if (detection.y < 0 || (detection.y) > height)//(detection.y + detection.height) > height)
+      valid = false;
+
+    return valid;
+  }
+
+  static yolo2::ImageDetections getValidDetections(yolo2::ImageDetections currDetections, int width, int height) {
+    
+    yolo2::ImageDetections detections;
+    std::vector<yolo2::Detection> detectionsList;
+    int numDetections = 0;
+    float currMaxConfidence = 0;
+    for (yolo2::Detection& detection : currDetections.detections) {
+      if (isValidDetection(detection, width, height)) {
+        if (detection.confidence > currMaxConfidence) {
+          currMaxConfidence = detection.confidence;
+          detectionsList.insert(detectionsList.begin(), detection);
+          numDetections++;
+        } else {
+          detectionsList.push_back(detection);
+          numDetections++;
+        }
+      }
+    }
+    detections.detections = detectionsList;
+    detections.num_detections = numDetections;
+    //publishBBox(detections);
+    return detections;
   }
 };
 }  // namespace yolo2
