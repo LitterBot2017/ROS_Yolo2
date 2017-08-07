@@ -141,11 +141,11 @@ class Yolo2Nodelet : public nodelet::Nodelet
     node.param<double>("nms", nms, .4);
 
     std::string config = NET_DATA + "downward.cfg", weights = NET_DATA + "downward_grass.weights";
-    yoloDownward.load(config, weights, 0.6, nms);
+    yoloDownward.load(config, weights, 0.45, nms);
 
     config = NET_DATA + "forward.cfg";
     weights = NET_DATA + "forward_grass.weights";
-    yoloForward.load(config, weights, confidence, nms);
+    yoloForward.load(config, weights, 0.45, nms);
 
     image_transport::ImageTransport transport = image_transport::ImageTransport(node);
     downwardSubscriber = transport.subscribe("left/image", 1, downwardImageCallback);
