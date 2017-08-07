@@ -72,10 +72,11 @@ Detector::~Detector()
   free_network(net_);
 }
 
-yolo2::ImageDetections Detector::detect(float *data)
+yolo2::ImageDetections Detector::detect(float *data, int width, int height)
 {
   yolo2::ImageDetections detections;
-  detections.detections = forward(data);
+  detections.detections = forward(data, width, height);
+  detections.num_detections = detections.detections.size();
   return detections;
 }
 
@@ -112,7 +113,40 @@ image Detector::convert_image(const sensor_msgs::ImageConstPtr& msg)
   return resized;
 }
 
-std::vector<yolo2::Detection> Detector::forward(float *data)
+image Detector::convert_image(const sensor_msgs::Image::Ptr& msg)
+{
+  if (msg->encoding != sensor_msgs::image_encodings::RGB8)
+  {
+    ROS_ERROR("Unsupported encoding");
+    exit(-1);
+  }
+
+  auto data = msg->data;
+  uint32_t height = msg->height, width = msg->width, offset = msg->step - 3 * width;
+  uint32_t i = 0, j = 0;
+  image im = make_image(width, height, 3);
+
+  for (uint32_t line = height; line; line--)
+  {
+    for (uint32_t column = width; column; column--)
+    {
+      for (uint32_t channel = 0; channel < 3; channel++)
+        im.data[i + width * height * channel] = data[j++] / 255.;
+      i++;
+    }
+    j += offset;
+  }
+
+  if (net_.w == width && net_.h == height)
+  {
+    return im;
+  }
+  image resized = resize_image(im, net_.w, net_.h);
+  free_image(im);
+  return resized;
+}
+
+std::vector<yolo2::Detection> Detector::forward(float *data, int width, int height)
 {
   float *prediction = network_predict(net_, data);
   layer output_layer = net_.layers[net_.n - 1];
@@ -137,10 +171,10 @@ std::vector<yolo2::Detection> Detector::forward(float *data)
       yolo2::Detection detection;
       box b = boxes_[i];
 
-      detection.x = ((int) round(b.x * 640));
-      detection.y = ((int) round(b.y * 480));
-      detection.width = ((int) round(b.w * 640));
-      detection.height = ((int) round(b.h * 480));
+      detection.x = ((int) round(b.x * width));
+      detection.y = ((int) round(b.y * height));
+      detection.width = ((int) round(b.w * width));
+      detection.height = ((int) round(b.h * height));
       detection.confidence = prob;
       detection.class_id = class_id;
       detections.push_back(detection);
